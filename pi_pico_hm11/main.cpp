@@ -1,61 +1,68 @@
+#include "stdio.h"
 #include "pico/stdlib.h"
 #include "hardware/uart.h"
 #include "src/HM11.h"
 #include "hardware/spi.h"
 #include "src/NRF24L01.h"
 
-int main(){
+#include "hardware/i2c.h"
+#include "hardware/flash.h"
+#include "src/BNO055.h"
 
-    uart_init(uart0, 9600);
-    gpio_set_function(16, GPIO_FUNC_UART);
-    gpio_set_function(17, GPIO_FUNC_UART);
+
+int main(){
 
     gpio_init(25);
     gpio_set_dir(25, 1);
 
+    HM11 phone(uart0, 9600, 16, 17);
 
-    HM11 phone(uart0);
-
-    NRF24L01 nrf(spi1, 9, 8);
+    NRF24L01 nrf(spi1,9,8);
     nrf.config();
 
-    nrf.modeRX();
-    //nrf.modeTX();
-
+    uint64_t counter = 0;
+    char msg[32];
     char buffer[32];
     uint8_t reg = 0;
+    nrf.modeTX();
 
-    char msg[32];
-    while(1){
+    BNO055 gyro(i2c1, 0x29, 14, 15);
+
+  while(1){
+
         phone.getData();
+        gyro.getData();
 
 
-        if( nrf.newMessage() == 1){
+        phone.sendMessage((char*)"H:%d\rR:%d.%d\rP:%d\rCm:%d\rCa:%d\rCg:%d\rCs:%d\rCF:%d\rC:%d\r",gyro.heading, gyro.roll,gyro.rollDec,gyro.pitch,
+        gyro.calMag, gyro.calAcc,gyro.calGyr,gyro.calSys, gyro.calibrate, gyro.calibrationData);
+
+        sprintf(msg,"%d",gyro.roll);
+        msg[30] = 'R';
+        msg[31] = 'O';
+        nrf.sendMessage(msg);
+    
+        if( nrf.newMessage() == 1)
+        {
             nrf.receiveMessage(msg);
 
-            sprintf(buffer,"%s\r", msg);
-
+            sprintf(buffer,"%s\r",msg);
             phone.sendMessage(buffer);
-            
         }
 
-        // sprintf(msg,"-45");
-        // msg[30] = 'R';
-        // msg[31] = 'O';
-        // nrf.sendMessage(msg);
-        // sleep_ms(1000);
-        // sprintf(msg,"45");
-        // msg[30] = 'R';
-        // msg[31] = 'O';
-        // nrf.sendMessage(msg);
-        // sleep_ms(1000);
+         if( phone.newMessage == true){
+            phone.newMessage = false;
+            phone.parseCommand();
 
-        // reg = nrf.readReg(0);
+            if( strcmp( phone.fieldName, "Calibrate") == 0){
+                gyro.calibrate = phone.fieldValue;
+            }
+            if( strcmp( phone.fieldName, "Led") == 0){
 
-        // itoa(reg,buffer,2);
+                gpio_put(25, phone.fieldValue);
+            }
 
-        // phone.sendMessage((char*)"reg=%d, %s\r", reg, buffer);
-
+        }
 
 
     }
