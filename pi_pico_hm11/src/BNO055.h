@@ -90,7 +90,7 @@ BNO055::BNO055(i2c_inst *port, uint8_t address, uint16_t sda, uint16_t scl)
 
 void BNO055::readReg(uint8_t reg, uint8_t *data, uint8_t sizeOfdata)
 {
-    i2c_write_blocking(port, address, &reg, sizeOfdata, true);
+    i2c_write_blocking(port, address, &reg, 1, true);
     i2c_read_blocking(port, address, data, sizeOfdata, false);
 }
 void BNO055::writeReg(uint8_t reg, uint8_t *data, uint8_t sizeOfdata)
