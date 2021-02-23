@@ -70,7 +70,7 @@ void HM11::getData(){
 }
 
 void HM11::parseCommand(){
-
+	newMessage = false;
     char* ptr = strtok(message, ":");
 
     sprintf(fieldName,"%s",ptr);
