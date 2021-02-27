@@ -39,7 +39,7 @@ public:
 HM11::HM11(uart_inst_t *uartPort, uint boudRate, int8_t tx, int8_t rx)
 {
     this->uartPort  = uartPort;
-    uart_init(uart0, boudRate);
+    uart_init(this->uartPort, boudRate);
     gpio_set_function(tx, GPIO_FUNC_UART);
     gpio_set_function(rx, GPIO_FUNC_UART);
 
