@@ -108,5 +108,5 @@ void NRF24::receiveMessage(char *msg){
 uint8_t NRF24::newMessage(){
     uint8_t fifo_status = readReg(0x17);
 
-    return !(0x00000001 & fifo_status);
+    return !(0b00000001 & fifo_status); // Corrected from video
 }
