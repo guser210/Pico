@@ -34,6 +34,9 @@ public: /// Funcs.
 
     uint8_t newMessage();
 
+    void setChannel(uint8_t ch);
+    void setAddressName(char *name);
+
 public:
     NRF24(spi_inst_t *port, uint16_t csn, uint16_t ce);
     ~NRF24();
