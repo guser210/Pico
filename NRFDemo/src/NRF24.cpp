@@ -76,12 +76,14 @@ void NRF24::modeTX(){
     uint8_t reg = readReg(0);
     reg &= ~(1<<0);
     writeReg(0, reg);
+    ceLow();
     sleep_us(130);
 }
 void NRF24::modeRX(){
     uint8_t reg = readReg(0);
     reg |= (1<<0);
     writeReg(0, reg);
+    ceHigh();
     sleep_us(130);
 
 }
