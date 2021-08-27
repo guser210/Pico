@@ -41,7 +41,7 @@ class DoubleJoystick:
         self.joystickInputs[self.currentChannel] = -1 if result > 20000 else 1 if result < 8000 else 0
         
         self.currentChannel += 1
-        if self.currentChannel >= 4: self.currentChannel = 0
+        if self.currentChannel >= len(self.joystickInputs): self.currentChannel = 0
         
         self.config(channel=self.currentChannel)
         
