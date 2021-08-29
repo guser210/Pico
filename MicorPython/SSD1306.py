@@ -38,7 +38,7 @@ class SSD:
         
         pixel = on<<(y%7)
         
-        page = int(( y - (y%y))/7) | 0xb0
+        page = int(( y - (y%7))/7) | 0xb0
         
         self.sendCommand(0b10000000, page)
         self.sendCommand(0b00000000, [xl,xh])
