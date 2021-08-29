@@ -22,6 +22,8 @@ class SSD:
         
         self.sendCommand(0b10000000, 0xa4)
         self.sendCommand(0b00000000, 0xaf)
+        self.sendCommand(0b00000000,0x8d)
+        self.sendCommand(0b00000000,0x14)
     
     def clear(self, on=255):
         for page in range(0xB0, 0xb8):
@@ -37,7 +39,7 @@ class SSD:
         xh = int((x>>4 & 0x0f) | 0b00010000)
         
         pixel = on<<(y%7)
-        
+         
         page = int(( y - (y%7))/7) | 0xb0
         
         self.sendCommand(0b10000000, page)
