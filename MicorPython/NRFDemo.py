@@ -49,12 +49,11 @@ class NRF:
         
         self.writeReg(0,0b00001010) # config
         utime.sleep_us(1500)
-        self.writeReg(1,0b00000011)
+        self.writeReg(1,0b00000011) #no ack
         
-        self.writeReg(4,0b00001111) # max retr
-        
+    
         self.writeReg(5, channel)
-        
+    
         self.writeReg(0x0a, channelName)
         self.writeReg(0x10, channelName)
         
@@ -76,6 +75,8 @@ class NRF:
         
     def sendMessage(self, data,size = 32):
         reg = [0b10100000]
+
+        
         
         self.csnLow()
         self.spi.write(bytearray([0b11100001]))
@@ -87,44 +88,62 @@ class NRF:
         localData = bytearray(data)
         localData.extend(bytearray(size - len(localData)))
         
-        print([len(localData),localData])
         self.spi.write(bytearray(localData))
         
         self.csnHigh()
         
         self.ceHigh()
         utime.sleep_us(10)
+        for i in range(0,10000):
+            reg = self.readReg(7)[0]
+            if reg & 0b00110000:
+                break
         self.ceLow()
-        
-        reg = self.readReg(7)[0]
-        reg |= (1<<5)
-        self.writeReg(7,reg)
+        self.writeReg(7,0b00110000) # Clear status flags.
         
         
-    def readMessage(self.size=32):
+        
+    def readMessage(self,size=32):
         reg = [0b01100001]
         
         self.csnLow()
         self.spi.write(bytearray(reg))
         result = self.spi.read(size)
         self.csnHigh()
-        
+        self.writeReg(0x07,0b01000000) # clear status flags
         return result
         
+    def newMessage(self):
+        regfs = self.readReg(0x17)[0]
+        regs = self.readReg(7)[0]
+        return  (not (0b00000001 & regfs)) or (0b01000000 & regs) 
     
-
+    
 nrf = NRF()
 nrf.config()
+nrf.modeRX()
 
-nrf.modeTX()
+messageToSend = "Data"
 
+timeout = 0;
+counter = 0
 while True:
-    a = nrf.readReg(0)[0]
-    print(bin(a))
-    a = nrf.readReg(7)
-    print(["status" , bin(a[0])])
-    
-    nrf.sendMessage("MicroPython sucks")
-    utime.sleep(0.1)
+
+
+    if nrf.newMessage(): # print any incoming message
+        print("recv: ","".join([chr(i) for i in nrf.readMessage()]))
+
+   
+    # if you want to send a message you do this.
+    timeout += 1
+    if timeout >= 1000 and messageToSend != "":
+        timeout= 0
+        counter += 1
+        nrf.modeTX() # change to transmitter.
+        nrf.sendMessage(messageToSend + str(counter)) # Send message
+        nrf.modeRX() # change to receiver.
         
-                           
+    
+    
+
+
