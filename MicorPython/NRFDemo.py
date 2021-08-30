@@ -101,7 +101,7 @@ class NRF:
         self.writeReg(7,reg)
         
         
-    def readMessage(size=32):
+    def readMessage(self.size=32):
         reg = [0b01100001]
         
         self.csnLow()
