@@ -1,149 +1,151 @@
-
 import utime
-from machine import SPI
-from machine import Pin
+from machine import SPI, Pin
+
 
 class NRF:
-    def __init__(self, port=1, miso=12, mosi=11, sck=10, csn=9, ce = 8):
-        self.csn = Pin(csn, 1)
-        self.ce = Pin(ce,1)
-        
-        self.spi = SPI(port, 1000000, miso=Pin(miso), mosi=Pin(mosi), sck=Pin(sck))
-        
-        self.csnHigh()
-        self.ceLow()
-        
+    def __init__(self, port=1, sck=10, mosi=11, miso=12, csn=9, ce=8,speed=4000000):
         utime.sleep_ms(11)
+        self.ce = Pin(ce,1)
+        self.csn = Pin(csn,1)
         
-    def csnHigh(self): self.csn(1)
-    def csnLow(self): self.csn(0)
-    def ceHigh(self): self.ce(1)
-    def ceLow(self): self.ce(0)
-    
+        self.spi = SPI(port, speed, sck = Pin(sck), mosi=Pin(mosi), miso=Pin(miso))
+        
+        self.ce(0)
+        self.csn(1)
+        
     def readReg(self, reg, size=1):
         reg = [0b00011111 & reg]
-        self.csnLow()
+        
+        self.csn(0)
         self.spi.write(bytearray(reg))
-        
         result = self.spi.read(size)
-        
-        self.csnHigh()
+        self.csn(1)
         
         return result
     
-    def writeReg(self, reg, data):
-        reg = [0b00100000 | (0b00011111 & reg)]
-        self.csnLow()
+    def writeReg(self, reg, value):
+        reg = [0b00100000 |  (0b00011111 & reg)]
+        
+        value = [value] if type(value) == type(1) else value
+        
+        self.csn(0)
         self.spi.write(bytearray(reg))
+        self.spi.write(bytearray(value))
+        self.csn(1)
+
+    def config(self):
+        self.csn(1)
+        self.ce(0)
         
-        data = [data] if type(data) == type(1) else data
-        self.spi.write(bytearray(data))
+        self.writeReg(0,0b00001010)
+        utime.sleep_ms(2)
         
-        self.csnHigh()
+        self.writeReg(1,0b00000011)
+        self.writeReg(3,0b00001111)
         
-    def config(self, channel=60, channelName ="gyroc", packetSize = 32):
-        self.csnHigh()
-        self.ceLow()
+        self.writeReg(5, 60)
         
-        utime.sleep_ms(11)
+        self.writeReg(6, 0b00001111)
         
-        self.writeReg(0,0b00001010) # config
-        utime.sleep_us(1500)
-        self.writeReg(1,0b00000011) #no ack
+        self.writeReg(0x0a, "gyroc")
+        self.writeReg(0x10, "gyroc")
         
-    
-        self.writeReg(5, channel)
-    
-        self.writeReg(0x0a, channelName)
-        self.writeReg(0x10, channelName)
+        self.writeReg(0x11,32)
         
-        self.writeReg(0x11, packetSize) #
         
     def modeTX(self):
-        reg = self.readReg(0)[0]
-        reg &= ~(1<<0)
-        self.writeReg(0,reg)
-        self.ceLow()
+        config = self.readReg(0)[0]
+        config &= ~(1<<0)
+        self.writeReg(0,config)
+        self.ce(0)
         utime.sleep_us(130)
+        
     def modeRX(self):
-        reg = self.readReg(0)[0]
-        reg |= (1<<0)
-        self.writeReg(0,reg)
-        self.ceHigh()
+        config = self.readReg(0)[0]
+        config |= (1<<0)
+        self.writeReg(0,config)
+        self.ce(1)
         utime.sleep_us(130)
-    
+    def sendMessage(self, msg):
+        self.modeTX()
         
-    def sendMessage(self, data,size = 32):
-        reg = [0b10100000]
-
-        
-        
-        self.csnLow()
+        self.csn(0)
         self.spi.write(bytearray([0b11100001]))
-        self.csnHigh()
+        self.csn(1)
         
-        self.csnLow()
+        status = self.readReg(7)[0]
+        status |= (1<<4)
+        self.writeReg(7,status)
+        
+        data = bytearray(msg)
+        data.extend(bytearray(32 - len(msg)))
+        
+        reg = [0b10100000]
+        self.csn(0)
         self.spi.write(bytearray(reg))
         
-        localData = bytearray(data)
-        localData.extend(bytearray(size - len(localData)))
+        self.spi.write(bytearray(data))
         
-        self.spi.write(bytearray(localData))
+        self.csn(1)
         
-        self.csnHigh()
+        self.ce(1)
         
-        self.ceHigh()
         utime.sleep_us(10)
-        for i in range(0,10000):
-            reg = self.readReg(7)[0]
-            if reg & 0b00110000:
-                break
-        self.ceLow()
-        self.writeReg(7,0b00110000) # Clear status flags.
+        
+        status = self.readReg(7)[0]
+        while (status & (1<<5)) == 0 and (status & (1<<4)) == 0:
+            status = self.readReg(7)[0]
+        
+        self.ce(0)
+        status |= (1<<4) | (1<<5)
+        self.writeReg(7,status)
+        
+        self.modeRX()
+        
+
+    def newMessage(self):
+        status = self.readReg(7)[0] # 6
+        fstatus = self.readReg(0x17)[0] # 1
         
         
+        result  = (not (0b00000001 & fstatus)) or (0b01000000 & status)
         
-    def readMessage(self,size=32):
-        reg = [0b01100001]
+        status |= (1<<4) | (1<<5)
+        self.writeReg(7,status)
         
-        self.csnLow()
-        self.spi.write(bytearray(reg))
-        result = self.spi.read(size)
-        self.csnHigh()
-        self.writeReg(0x07,0b01000000) # clear status flags
         return result
         
-    def newMessage(self):
-        regfs = self.readReg(0x17)[0]
-        regs = self.readReg(7)[0]
-        return  (not (0b00000001 & regfs)) or (0b01000000 & regs) 
-    
-    
+    def readMessage(self):
+        reg = [0b01100001]
+        
+        self.csn(0)
+        self.spi.write(bytearray(reg))
+        result = self.spi.read(32)
+        self.csn(1)
+        status = self.readReg(7)[0]
+        status |= (1<<6)
+        self.writeReg(7,status)
+        
+        return result
+        
+
 nrf = NRF()
 nrf.config()
+
 nrf.modeRX()
+print( bin(nrf.readReg(0)[0]))
 
-messageToSend = "Data"
-
-timeout = 0;
+led = Pin(25,1)
 counter = 0
 while True:
-
-
-    if nrf.newMessage(): # print any incoming message
-        print("recv: ","".join([chr(i) for i in nrf.readMessage()]))
-
-   
-    # if you want to send a message you do this.
-    timeout += 1
-    if timeout >= 1000 and messageToSend != "":
-        timeout= 0
-        counter += 1
-        nrf.modeTX() # change to transmitter.
-        nrf.sendMessage(messageToSend + str(counter)) # Send message
-        nrf.modeRX() # change to receiver.
-        
+    led.toggle()
+    if nrf.newMessage() > 0:
+        print("msg: ", "".join([chr(i) for i in nrf.readMessage()]))
+    counter += 1
     
+    nrf.sendMessage("From 2: " + str(counter))
+    utime.sleep(0.1)
     
+
 
 
